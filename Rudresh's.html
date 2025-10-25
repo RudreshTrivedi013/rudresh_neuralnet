@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroNet: Rudresh's AI Grid</title>
+    <style>
+        :root {
+            --color-white: rgba(255, 255, 255, 1);
+            --color-black: rgba(0, 0, 0, 0);
+            --color-gray-200: rgba(245, 245, 245, 1);
+            --color-gray-300: rgba(167, 169, 169, 1);
+            --color-teal-300: rgba(50, 184, 198, 1);
+            --color-teal-500: rgba(33, 128, 141, 1);
+            --font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family-base);
+            background: #000;
+            color: var(--color-white);
+            overflow: hidden;
+            cursor: grab;
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        body.dragging {
+            cursor: grabbing;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+
+        .header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .header h1 {
+            font-size: clamp(18px, 4vw, 24px);
+            font-weight: 600;
+            color: var(--color-teal-300);
+            margin-bottom: 4px;
+            text-shadow: 0 0 20px rgba(50, 184, 198, 0.5);
+        }
+
+        .header p {
+            font-size: clamp(12px, 2.5vw, 14px);
+            color: var(--color-gray-300);
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10;
+            text-align: right;
+            pointer-events: none;
+        }
+
+        .instructions p {
+            font-size: clamp(10px, 2vw, 12px);
+            color: var(--color-gray-300);
+            margin: 4px 0;
+        }
+
+        .modal {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: linear-gradient(135deg, rgba(20, 20, 30, 0.98), rgba(10, 10, 20, 0.98));
+            border: 2px solid rgba(50, 184, 198, 0.5);
+            border-radius: 20px;
+            padding: clamp(20px, 5vw, 40px);
+            max-width: min(600px, 90vw);
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(50, 184, 198, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .modal.active {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: all;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: clamp(16px, 4vw, 24px);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .modal-header h2 {
+            font-size: clamp(20px, 5vw, 28px);
+            font-weight: 700;
+            color: var(--color-teal-300);
+            text-shadow: 0 0 30px rgba(50, 184, 198, 0.6);
+            letter-spacing: -0.5px;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--color-gray-300);
+            font-size: clamp(20px, 5vw, 24px);
+            cursor: pointer;
+            padding: 0;
+            min-width: 32px;
+            min-height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+            flex-shrink: 0;
+        }
+
+        .close-btn:hover {
+            color: var(--color-white);
+        }
+
+        .modal-content p {
+            color: #e5e7eb;
+            line-height: 1.8;
+            margin-bottom: clamp(12px, 3vw, 18px);
+            font-size: clamp(13px, 2.5vw, 15px);
+        }
+
+        .modal-content ul {
+            list-style: none;
+            margin-bottom: clamp(12px, 3vw, 18px);
+        }
+
+        .modal-content li {
+            color: #e5e7eb;
+            padding: clamp(8px, 2vw, 12px) clamp(12px, 3vw, 16px);
+            padding-left: clamp(28px, 6vw, 36px);
+            position: relative;
+            margin-bottom: clamp(6px, 1.5vw, 8px);
+            background: rgba(50, 184, 198, 0.08);
+            border-radius: 8px;
+            border-left: 3px solid var(--color-teal-300);
+            font-size: clamp(12px, 2.5vw, 14px);
+            line-height: 1.6;
+            word-break: break-word;
+        }
+
+        .modal-content li::before {
+            content: "→";
+            position: absolute;
+            left: clamp(8px, 2vw, 12px);
+            color: var(--color-teal-300);
+            font-weight: bold;
+            font-size: clamp(14px, 3vw, 16px);
+        }
+
+        .modal-content strong {
+            color: var(--color-teal-300);
+            font-weight: 600;
+        }
+
+        .modal-content a {
+            color: var(--color-teal-300);
+            text-decoration: underline;
+            transition: color 0.2s;
+        }
+
+        .modal-content a:hover {
+            color: var(--color-white);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 99;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .overlay.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            .header {
+                top: 10px;
+                left: 10px;
+            }
+            
+            .instructions {
+                bottom: 10px;
+                right: 10px;
+            }
+            
+            .modal {
+                border-radius: 16px;
+                max-height: 85vh;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .modal {
+                padding: 20px 16px;
+                border-radius: 12px;
+            }
+            
+            .modal-header {
+                margin-bottom: 16px;
+            }
+        }
+
+        /* Landscape mobile */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .modal {
+                max-height: 90vh;
+                padding: 16px;
+            }
+        }
+
+        /* Custom scrollbar */
+        .modal::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .modal::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        .modal::-webkit-scrollbar-thumb {
+            background: var(--color-teal-300);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>NeuroNet: Rudresh's AI Grid</h1>
+        <p>Rudresh Trivedi - Full-Stack Developer</p>
+    </div>
+
+    <div class="instructions">
+        <p>Click on neural nodes to explore</p>
+        <p>Drag to rotate • Scroll/Pinch to zoom</p>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="modal" id="modal">
+        <div class="modal-header">
+            <h2 id="modalTitle">Node Title</h2>
+            <button class="close-btn" id="closeBtn">&times;</button>
+        </div>
+        <div class="modal-content" id="modalContent"></div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const modal = document.getElementById('modal');
+        const overlay = document.getElementById('overlay');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalContent = document.getElementById('modalContent');
+        const closeBtn = document.getElementById('closeBtn');
+
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+
+        // Camera controls
+        let camera = {
+            x: 0,
+            y: 0,
+            z: 1000,
+            rotationX: 0,
+            rotationY: 0,
+            targetZ: 1000
+        };
+
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let lastTouchX = 0;
+        let lastTouchY = 0;
+
+        // Device detection
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isTablet = /(ipad|tablet|(android(?!.*mobile))|(windows(?!.*phone)(.*touch))|kindle|playbook|silk|(puffin(?!.*(IP|AP|WP))))/.test(navigator.userAgent.toLowerCase());
+
+        // Responsive scaling - significantly increased for better visibility and clickability
+        const nodeScale = isMobile ? 1.3 : isTablet ? 1.5 : 1.6;
+
+        // Node data with responsive scaling
+        const nodes = [
+            { 
+                id: 'about', 
+                x: 600, y: -300, z: 150, 
+                radius: 70 * nodeScale, 
+                color: '#32B8C6',
+                label: 'About Me',
+                content: `<p>Full-Stack Developer skilled in Python, Java, and the MERN Stack, passionate about building AI-powered, data-driven, and scalable web applications.</p>
+                <p>Experienced in Django, MongoDB and REST APIs with a strong foundation in software design, problem-solving, and modern web technologies.</p>
+                <p>Continuously exploring AI/ML and data analytics to develop intelligent, high-performance solutions that create real-world impact.</p>`
+            },
+            { 
+                id: 'skills', 
+                x: -500, y: -400, z: 250, 
+                radius: 60 * nodeScale, 
+                color: '#A855F7',
+                label: 'Skills',
+                content: `<ul>
+                    <li>Languages: JavaScript, Python, Java</li>
+                    <li>Web: HTML5, CSS3, JSON, ES6, React, Next.js</li>
+                    <li>Frameworks: Django, Bootstrap, Matplotlib, NumPy</li>
+                    <li>Database: MongoDB, SQL</li>
+                    <li>Tools: Git, REST APIs, CustomTkinter</li>
+                    <li>AI/ML: spaCy, scikit-learn, pdfplumber</li>
+                </ul>`
+            },
+            { 
+                id: 'contact', 
+                x: 400, y: -250, z: -200, 
+                radius: 50 * nodeScale, 
+                color: '#EC4899',
+                label: 'Contact',
+                content: `<p>Let's connect and build something amazing together!</p>
+                <ul>
+                    <li>Email: <a href="mailto:rudreshtrivedi078@gmail.com" target="_blank">rudreshtrivedi078@gmail.com</a></li>
+                    <li>Phone: <a href="tel:+919664670208">+91 9664670208</a></li>
+                    <li>Location: Ahmedabad, India</li>
+                    <li>GitHub: <a href="https://github.com/RudreshTrivedi013" target="_blank" rel="noopener noreferrer">github.com/RudreshTrivedi013</a></li>
+                    <li>LeetCode: <a href="https://leetcode.com/RudreshTrivedi" target="_blank" rel="noopener noreferrer">leetcode.com/RudreshTrivedi</a></li>
+                </ul>`
+            },
+            { 
+                id: 'projects', 
+                x: -350, y: 350, z: -150, 
+                radius: 80 * nodeScale, 
+                color: '#22C55E',
+                label: 'Projects',
+                content: `<ul>
+                    <li><strong>StockPulse Dashboard:</strong> Python GUI with CustomTkinter for stock analysis. Integrated Yahoo Finance API for real-time data visualization with Matplotlib<br><a href="https://github.com/RudreshTrivedi013/StockMarket_analysis" target="_blank" rel="noopener noreferrer">View on GitHub →</a></li>
+                    <li><strong>SmartAI Resume Scanner:</strong> AI-integrated Django app using pdfplumber, spaCy, and scikit-learn for automated skill-matching and ATS scoring<br><a href="https://github.com/RudreshTrivedi013/Resume-Analyzer" target="_blank" rel="noopener noreferrer">View on GitHub →</a></li>
+                    <li><strong>Developer Portfolio Website:</strong> Responsive portfolio using HTML, Tailwind CSS, and JavaScript with animated effects and SEO best practices<br><a href="https://github.com/RudreshTrivedi013" target="_blank" rel="noopener noreferrer">View on GitHub →</a></li>
+                </ul>`
+            },
+            { 
+                id: 'experience', 
+                x: 700, y: 200, z: 150, 
+                radius: 75 * nodeScale, 
+                color: '#EAB308',
+                label: 'Experience',
+                content: `<p>Building AI-powered, data-driven, and scalable web applications with modern technologies.</p>
+                <ul>
+                    <li>Full-stack development with MERN Stack, Django</li>
+                    <li>AI/ML integration using spaCy, scikit-learn</li>
+                    <li>REST API development and integration</li>
+                    <li>Data visualization and analytics</li>
+                    <li>Database design with MongoDB and SQL</li>
+                </ul>`
+            },
+            { 
+                id: 'education', 
+                x: 650, y: 450, z: -180, 
+                radius: 48 * nodeScale, 
+                color: '#F97316',
+                label: 'Education',
+                content: `<p><strong>L.J. University</strong></p>
+                <p>Computer Science Engineering</p>
+                <p>2023 - 2027</p>
+                <p>Focusing on software design, problem-solving, and modern web technologies with strong emphasis on AI/ML and data analytics.</p>`
+            },
+            { 
+                id: 'certificates', 
+                x: -250, y: 550, z: 200, 
+                radius: 55 * nodeScale, 
+                color: '#8B5CF6',
+                label: 'Certificates',
+                content: `<p>Continuous learning through online courses and certifications:</p>
+                <ul>
+                    <li>Introduction to Java</li>
+                    <li>Introduction to HTML, CSS, & JavaScript</li>
+                    <li>Inheritance and Data Structures in Java</li>
+                </ul>`
+            },
+            { 
+                id: 'coding', 
+                x: 850, y: 650, z: -250, 
+                radius: 45 * nodeScale, 
+                color: '#64748B',
+                label: 'Coding Profile',
+                content: `<p>Active on competitive programming platforms:</p>
+                <ul>
+                    <li><strong>LeetCode:</strong> <a href="https://leetcode.com/RudreshTrivedi" target="_blank" rel="noopener noreferrer">RudreshTrivedi</a></li>
+                    <li><strong>GitHub:</strong> <a href="https://github.com/RudreshTrivedi013" target="_blank" rel="noopener noreferrer">RudreshTrivedi013</a></li>
+                </ul>
+                <p>Regularly practicing Data Structures & Algorithms and contributing to open-source projects.</p>`
+            }
+        ];
+
+        // Connections
+        const connections = [
+            ['projects', 'about'],
+            ['projects', 'skills'],
+            ['projects', 'experience'],
+            ['projects', 'certificates'],
+            ['projects', 'education'],
+            ['projects', 'coding'],
+            ['about', 'contact'],
+            ['about', 'experience'],
+            ['skills', 'education']
+        ];
+
+        // Performance optimizations for different devices
+        const starCount = isMobile ? 200 : isTablet ? 350 : 500;
+        const nebulaCount = isMobile ? 6 : isTablet ? 9 : 12;
+        const spiralArmParticles = isMobile ? 30 : isTablet ? 50 : 80;
+
+        // Stars
+        const stars = [];
+        for (let i = 0; i < starCount; i++) {
+            stars.push({
+                x: (Math.random() - 0.5) * width * 4,
+                y: (Math.random() - 0.5) * height * 4,
+                z: Math.random() * 3000,
+                size: Math.random() * 3 + 0.5,
+                twinkle: Math.random() * Math.PI * 2,
+                speed: 0.01 + Math.random() * 0.02,
+                brightness: Math.random()
+            });
+        }
+
+        // Nebulae
+        const nebulae = [];
+        const nebulaColors = [
+            'rgba(50, 184, 198, 0.12)',
+            'rgba(168, 85, 247, 0.1)',
+            'rgba(236, 72, 153, 0.1)',
+            'rgba(34, 197, 94, 0.08)',
+            'rgba(245, 101, 101, 0.09)',
+            'rgba(251, 191, 36, 0.07)',
+            'rgba(139, 92, 246, 0.11)'
+        ];
+
+        for (let i = 0; i < nebulaCount; i++) {
+            nebulae.push({
+                x: (Math.random() - 0.5) * width * 3,
+                y: (Math.random() - 0.5) * height * 3,
+                z: Math.random() * 2000,
+                size: 150 + Math.random() * 400,
+                color: nebulaColors[i % nebulaColors.length],
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 0.001,
+                opacity: 0.3 + Math.random() * 0.4
+            });
+        }
+
+        // Spiral arms
+        const spiralArms = [];
+        for (let i = 0; i < 3; i++) {
+            spiralArms.push({
+                angle: (i * Math.PI * 2) / 3,
+                radius: 200 + i * 100,
+                particles: []
+            });
+
+            for (let j = 0; j < spiralArmParticles; j++) {
+                const angle = spiralArms[i].angle + (j * 0.1);
+                const radius = spiralArms[i].radius + (j * 3);
+                spiralArms[i].particles.push({
+                    x: Math.cos(angle) * radius,
+                    y: Math.sin(angle) * radius,
+                    z: (Math.random() - 0.5) * 500,
+                    brightness: Math.random() * 0.6
+                });
+            }
+        }
+
+        function project3D(x, y, z) {
+            const cosY = Math.cos(camera.rotationY);
+            const sinY = Math.sin(camera.rotationY);
+            const cosX = Math.cos(camera.rotationX);
+            const sinX = Math.sin(camera.rotationX);
+
+            let tempZ = z * cosY - x * sinY;
+            let tempX = z * sinY + x * cosY;
+            
+            let tempY = y * cosX - tempZ * sinX;
+            tempZ = y * sinX + tempZ * cosX;
+
+            x = tempX;
+            y = tempY;
+            z = tempZ;
+
+            z += camera.z;
+            
+            const scale = 500 / (z + 500);
+            return {
+                x: x * scale + width / 2,
+                y: y * scale + height / 2,
+                scale: scale,
+                z: z
+            };
+        }
+
+        function drawRealisticBackground() {
+            const centerX = width / 2;
+            const centerY = height / 2;
+            
+            const gradient1 = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, Math.max(width, height));
+            gradient1.addColorStop(0, '#0a0a15');
+            gradient1.addColorStop(0.3, '#06080f');
+            gradient1.addColorStop(0.6, '#030408');
+            gradient1.addColorStop(1, '#000000');
+            ctx.fillStyle = gradient1;
+            ctx.fillRect(0, 0, width, height);
+
+            const gradient2 = ctx.createRadialGradient(centerX * 0.3, centerY * 0.7, 0, centerX * 1.5, centerY * 1.2, width);
+            gradient2.addColorStop(0, 'rgba(15, 20, 30, 0.2)');
+            gradient2.addColorStop(0.5, 'rgba(8, 10, 15, 0.1)');
+            gradient2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = gradient2;
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        function drawSpiralArms() {
+            spiralArms.forEach(arm => {
+                arm.particles.forEach(particle => {
+                    const projected = project3D(particle.x, particle.y, particle.z);
+                    if (projected.z > 0) {
+                        const alpha = particle.brightness * projected.scale * 0.3;
+                        ctx.fillStyle = `rgba(100, 149, 237, ${alpha})`;
+                        ctx.beginPath();
+                        ctx.arc(projected.x, projected.y, projected.scale * 1.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+            });
+        }
+
+        function drawEnhancedNebulae() {
+            const sortedNebulae = [...nebulae].sort((a, b) => b.z - a.z);
+            
+            sortedNebulae.forEach(nebula => {
+                const projected = project3D(nebula.x, nebula.y, nebula.z);
+                if (projected.z > 0) {
+                    nebula.rotation += nebula.rotationSpeed;
+                    
+                    const size = nebula.size * projected.scale;
+                    const alpha = nebula.opacity * projected.scale * 0.8;
+                    
+                    const layers = isMobile ? 2 : 3;
+                    for (let layer = 0; layer < layers; layer++) {
+                        const layerSize = size * (0.6 + layer * 0.3);
+                        const layerAlpha = alpha * (0.8 - layer * 0.2);
+                        
+                        const gradient = ctx.createRadialGradient(
+                            projected.x, projected.y, 0,
+                            projected.x, projected.y, layerSize
+                        );
+                        
+                        const color = nebula.color.replace(/[\d.]+\)$/, `${layerAlpha})`);
+                        gradient.addColorStop(0, color);
+                        gradient.addColorStop(0.4, color.replace(/[\d.]+\)$/, `${layerAlpha * 0.6})`));
+                        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                        
+                        ctx.save();
+                        ctx.globalCompositeOperation = layer === 0 ? 'normal' : 'screen';
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(projected.x, projected.y, layerSize, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                }
+            });
+        }
+
+        function drawRealisticStars() {
+            stars.forEach(star => {
+                star.twinkle += star.speed;
+                const projected = project3D(star.x, star.y, star.z);
+                
+                if (projected.z > 0) {
+                    const twinkleAlpha = (Math.sin(star.twinkle) + 1) / 2;
+                    const baseAlpha = star.brightness * projected.scale * 0.9;
+                    const alpha = baseAlpha + (twinkleAlpha * 0.3);
+                    
+                    const starSize = star.size * projected.scale;
+                    
+                    if (starSize > 0.5) {
+                        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                        ctx.beginPath();
+                        ctx.arc(projected.x, projected.y, starSize, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        if (starSize > 1.2 && alpha > 0.6 && !isMobile) {
+                            ctx.fillStyle = `rgba(200, 220, 255, ${alpha * 0.3})`;
+                            ctx.beginPath();
+                            ctx.arc(projected.x, projected.y, starSize * 2.5, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                }
+            });
+        }
+
+        function drawConnections() {
+            connections.forEach(([id1, id2]) => {
+                const node1 = nodes.find(n => n.id === id1);
+                const node2 = nodes.find(n => n.id === id2);
+                
+                const p1 = project3D(node1.x, node1.y, node1.z);
+                const p2 = project3D(node2.x, node2.y, node2.z);
+                
+                if (p1.z > 0 && p2.z > 0) {
+                    const avgScale = (p1.scale + p2.scale) / 2;
+                    ctx.strokeStyle = `rgba(50, 184, 198, ${avgScale * 0.4})`;
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        function drawNodes() {
+            const sortedNodes = [...nodes].sort((a, b) => {
+                const pa = project3D(a.x, a.y, a.z);
+                const pb = project3D(b.x, b.y, b.z);
+                return pb.z - pa.z;
+            });
+
+            sortedNodes.forEach(node => {
+                const projected = project3D(node.x, node.y, node.z);
+                
+                if (projected.z > 0) {
+                    const radius = node.radius * projected.scale;
+                    
+                    ctx.shadowBlur = 25 * projected.scale;
+                    ctx.shadowColor = node.color;
+                    
+                    ctx.fillStyle = node.color;
+                    ctx.globalAlpha = 0.85;
+                    ctx.beginPath();
+                    ctx.arc(projected.x, projected.y, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1;
+                    
+                    const fontSize = Math.max(isMobile ? 12 : 14, 16 * projected.scale);
+                    ctx.font = `400 ${fontSize}px Inter, sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    ctx.shadowBlur = 6;
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                    ctx.fillStyle = node.color;
+                    ctx.fillText(node.label, projected.x, projected.y + radius + 25 * projected.scale);
+                    
+                    ctx.shadowBlur = 0;
+                    
+                    node.screenX = projected.x;
+                    node.screenY = projected.y;
+                    node.screenRadius = radius;
+                }
+            });
+        }
+
+        function animate() {
+            drawRealisticBackground();
+            
+            camera.z += (camera.targetZ - camera.z) * 0.1;
+            
+            if (!isDragging) {
+                camera.rotationY += 0.0005;
+            }
+            
+            drawSpiralArms();
+            drawEnhancedNebulae();
+            drawRealisticStars();
+            drawConnections();
+            drawNodes();
+            
+            requestAnimationFrame(animate);
+        }
+
+        // Mouse controls
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+            document.body.classList.add('dragging');
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                
+                camera.rotationY += deltaX * 0.005;
+                camera.rotationX += deltaY * 0.005;
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            document.body.classList.remove('dragging');
+        });
+
+        // Touch controls
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDragging = true;
+            const touch = e.touches[0];
+            lastTouchX = touch.clientX;
+            lastTouchY = touch.clientY;
+            document.body.classList.add('dragging');
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (isDragging && e.touches.length === 1) {
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - lastTouchX;
+                const deltaY = touch.clientY - lastTouchY;
+                
+                camera.rotationY += deltaX * 0.01;
+                camera.rotationX += deltaY * 0.01;
+                
+                lastTouchX = touch.clientX;
+                lastTouchY = touch.clientY;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => {
+            isDragging = false;
+            document.body.classList.remove('dragging');
+        });
+
+        // Pinch zoom
+        let initialPinchDistance = null;
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                initialPinchDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && initialPinchDistance) {
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                const delta = (initialPinchDistance - currentDistance) * 2;
+                camera.targetZ += delta;
+                camera.targetZ = Math.max(400, Math.min(camera.targetZ, 2000));
+                
+                initialPinchDistance = currentDistance;
+            }
+        });
+
+        // Mouse wheel zoom
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            camera.targetZ += e.deltaY * 0.5;
+            camera.targetZ = Math.max(400, Math.min(camera.targetZ, 2000));
+        }, { passive: false });
+
+        // Improved click detection with drag tolerance
+        let dragThreshold = 10;
+        let startX = 0;
+        let startY = 0;
+        let hasDragged = false;
+
+        canvas.addEventListener('mousedown', (e) => {
+            startX = e.clientX;
+            startY = e.clientY;
+            hasDragged = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const dx = Math.abs(e.clientX - startX);
+                const dy = Math.abs(e.clientY - startY);
+                if (dx > dragThreshold || dy > dragThreshold) {
+                    hasDragged = true;
+                }
+            }
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                hasDragged = false;
+            }
+        }, { passive: true });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1) {
+                const dx = Math.abs(e.touches[0].clientX - startX);
+                const dy = Math.abs(e.touches[0].clientY - startY);
+                if (dx > dragThreshold || dy > dragThreshold) {
+                    hasDragged = true;
+                }
+            }
+        }, { passive: true });
+
+        // Node clicking with improved hit detection
+        function handleNodeClick(e) {
+            // Don't trigger if user was dragging
+            if (hasDragged) {
+                hasDragged = false;
+                return;
+            }
+            
+            const rect = canvas.getBoundingClientRect();
+            let clientX, clientY;
+            
+            if (e.type === 'click') {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            } else if (e.type === 'touchend' && e.changedTouches.length > 0) {
+                clientX = e.changedTouches[0].clientX;
+                clientY = e.changedTouches[0].clientY;
+            } else {
+                return;
+            }
+            
+            const mouseX = clientX - rect.left;
+            const mouseY = clientY - rect.top;
+            
+            // Increase hit radius for easier clicking, especially on mobile
+            const hitRadiusMultiplier = isMobile ? 1.5 : 1.3;
+            
+            for (const node of nodes) {
+                if (node.screenX && node.screenY && node.screenRadius) {
+                    const dx = mouseX - node.screenX;
+                    const dy = mouseY - node.screenY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    // Use larger hit radius for better tap detection
+                    if (distance < node.screenRadius * hitRadiusMultiplier) {
+                        showModal(node);
+                        break;
+                    }
+                }
+            }
+        }
+
+        canvas.addEventListener('click', handleNodeClick);
+        canvas.addEventListener('touchend', handleNodeClick);
+
+        function showModal(node) {
+            modalTitle.textContent = node.label;
+            modalContent.innerHTML = node.content;
+            modal.classList.add('active');
+            overlay.classList.add('active');
+        }
+
+        function hideModal() {
+            modal.classList.remove('active');
+            overlay.classList.remove('active');
+        }
+
+        closeBtn.addEventListener('click', hideModal);
+        overlay.addEventListener('click', hideModal);
+
+        // Handle resize and orientation change
+        function handleResize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(handleResize, 200);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
